@@ -12,21 +12,11 @@ const ROLE_SESSION_KEY = 'CHRONOUS_USER_ROLE';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(() => {
-    // Clean up any old localStorage sessions to ensure re-login is required after closing browser
     try {
-      localStorage.removeItem(USER_SESSION_KEY);
-      localStorage.removeItem(ROLE_SESSION_KEY);
+      const saved = sessionStorage.getItem(USER_SESSION_KEY);
+      if (saved) return JSON.parse(saved);
     } catch {
-      // ignore
-    }
-
-    const saved = sessionStorage.getItem(USER_SESSION_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return null;
-      }
+      // Ignore invalid session data.
     }
     return null;
   });
@@ -41,7 +31,6 @@ export default function App() {
   const [queueState, setQueueState] = useState<QueueState | null>(null);
   const [isDbConnected, setIsDbConnected] = useState(true);
 
-  // Fetch full queue state from database
   const refreshQueue = useCallback(async () => {
     try {
       const state = await api.getQueueState();
@@ -53,53 +42,28 @@ export default function App() {
     }
   }, []);
 
-  // Initial load and Server-Sent Events (SSE) for real-time live synchronization
+  // GitHub Pages is static hosting. Use polling instead of /api/events SSE.
   useEffect(() => {
     refreshQueue();
-
-    // Setup SSE connection
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource('/api/events');
-
-      eventSource.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data);
-          // Any database token event triggers immediate refresh
-          refreshQueue();
-        } catch (e) {
-          console.error('Error parsing SSE event:', e);
-        }
-      };
-
-      eventSource.onerror = () => {
-        // SSE may drop, will automatically retry
-        setIsDbConnected(false);
-      };
-
-      eventSource.onopen = () => {
-        setIsDbConnected(true);
-      };
-    } catch (err) {
-      console.warn('SSE not supported or failed to initialize:', err);
-    }
-
-    // Polling safety net fallback every 3 seconds
     const interval = setInterval(refreshQueue, 3000);
-
-    return () => {
-      clearInterval(interval);
-      if (eventSource) {
-        eventSource.close();
-      }
-    };
+    return () => clearInterval(interval);
   }, [refreshQueue]);
 
   const handleUserLogin = (loggedInUser: User) => {
-    setUser(loggedInUser);
-    setRole('user');
+    // Save the successful login BEFORE navigating to index.html.
+    // App will restore this session when index.html loads.
     sessionStorage.setItem(USER_SESSION_KEY, JSON.stringify(loggedInUser));
     sessionStorage.setItem(ROLE_SESSION_KEY, 'user');
+
+    setUser(loggedInUser);
+    setRole('user');
+
+    // Explicitly open the main/index page after successful login.
+    // This works with the GitHub Pages /chronous/ project path.
+    const basePath = window.location.pathname.includes('/chronous/')
+      ? '/chronous/'
+      : './';
+    window.location.assign(`${basePath}index.html`);
   };
 
   const handleUserLogout = () => {
@@ -125,16 +89,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
-      {/* Header */}
       <Header
         currentRole={role}
         onSelectRole={handleSelectRole}
         isDbConnected={isDbConnected}
       />
 
-      {/* Main Content Area */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* VIEW 1: Role Selection Screen (matching role.html) */}
         {role === null && (
           <RoleSelect
             onSelectUser={() => handleSelectRole('user')}
@@ -142,13 +103,12 @@ export default function App() {
           />
         )}
 
-        {/* VIEW 2: Citizen / User Flow (matching login.html and index.html) */}
         {role === 'user' && (
           <>
             {!user ? (
               <UserAuth
                 onLoginSuccess={handleUserLogin}
-                onBackToRoles={() => setRole(null)}
+                onBackToRoles={() => handleSelectRole(null)}
               />
             ) : (
               <UserPanel
@@ -161,7 +121,6 @@ export default function App() {
           </>
         )}
 
-        {/* VIEW 3: Operator Panel (matching operator.html) */}
         {role === 'operator' && (
           <OperatorPanel
             queueState={queueState}
@@ -171,12 +130,9 @@ export default function App() {
         )}
       </main>
 
-      {/* Global Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            CHRONOUS • MeeSeva Style Queue & Token Management System
-          </div>
+          <div>CHRONOUS • MeeSeva Style Queue & Token Management System</div>
           <div className="flex items-center gap-2 text-slate-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
             <span>SQLite Database Connected</span>
