@@ -6,7 +6,7 @@ import { QueueState, Token, User } from '../types';
 
 const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL ||
-  'https://yurhvixksoyfgdyuxuxl.supabase.co';
+  'https://bnxbnkuottgjzqbotpve.supabase.co';
 
 const SUPABASE_ANON_KEY =
   import.meta.env.VITE_SUPABASE_ANON_KEY || '';
