@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      VITE_SUPABASE_URL: https://yurhvixksoyfgdyuxuxl.supabase.co
+      VITE_SUPABASE_URL: https://bnxbnkuottgjzqbotpve.supabase.co
       VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
     steps:
