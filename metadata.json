@@ -1,0 +1,6 @@
+{
+  "name": "CHRONOUS - Token Management System",
+  "description": "MeeSeva-style queue and token management system with database persistence for users and operators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
