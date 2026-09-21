@@ -136,6 +136,11 @@ function convertToken(data: any): Token {
 
     completed_at:
       data.completed_at || null,
+
+    alarm_before:
+      data.alarm_before === null || data.alarm_before === undefined
+        ? 2
+        : Number(data.alarm_before),
   };
 }
 
@@ -418,7 +423,8 @@ export const api = {
       id?: number;
       name?: string;
       mobile?: string;
-    }
+    },
+    alarmBefore = 2
   ): Promise<Token> {
 
     /* -------------------------------------------------------
@@ -485,10 +491,53 @@ export const api = {
       );
     }
 
+    // Alarm audio is played only by the citizen's browser.
+    // Supabase stores only the number of tokens before the alarm.
+    await this.setTokenAlarm(
+      Number(token.id),
+      Math.min(5, Math.max(1, Number(alarmBefore) || 2))
+    );
 
-    return convertToken(token);
+    return convertToken({
+      ...token,
+      alarm_before: Math.min(5, Math.max(1, Number(alarmBefore) || 2)),
+    });
   },
 
+
+  /* =======================================================
+     SAVE / LOAD CITIZEN ALARM PREFERENCE
+     ======================================================= */
+
+  async setTokenAlarm(
+    tokenId: number,
+    alarmBefore: number
+  ): Promise<void> {
+    const value = Math.min(5, Math.max(1, Number(alarmBefore) || 2));
+
+    await supabaseRequest(
+      `/rest/v1/tokens?id=eq.${encodeURIComponent(tokenId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          alarm_before: value,
+        }),
+      }
+    );
+  },
+
+  async getTokenAlarm(tokenId: number): Promise<number> {
+    const rows = await supabaseRequest(
+      `/rest/v1/tokens?select=alarm_before&id=eq.${encodeURIComponent(tokenId)}&limit=1`
+    );
+
+    return rows?.[0]?.alarm_before == null
+      ? 2
+      : Number(rows[0].alarm_before);
+  },
 
   /* =======================================================
      CALL NEXT TOKEN
