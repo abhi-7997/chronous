@@ -1,11 +1,6 @@
 export type Role = 'user' | 'operator' | null;
 
-export type ServiceType =
-  | 'Certificates'
-  | 'Revenue Services'
-  | 'Municipal Services'
-  | 'Electricity Services'
-  | 'Other Services';
+export type ServiceType = string;
 
 export interface User {
   id: number;
@@ -28,6 +23,7 @@ export interface Token {
   created_at: string;
   called_at: string | null;
   completed_at: string | null;
+  alarm_before?: number | null;
 }
 
 export interface SystemState {
