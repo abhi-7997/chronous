@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { QueueState, Token, User, ServiceType } from '../types';
 import { api } from '../services/api';
+import { SERVICE_CATALOG } from '../services/serviceCatalog';
 import { playNotificationSound, playAlarmSound, stopAlarmSound, speakAnnouncement } from '../utils/audio';
 
 const SERVICES: ServiceType[] = [
@@ -606,6 +607,35 @@ export const UserPanel: React.FC<UserPanelProps> = ({
                     </option>
                   ))}
                 </select>
+
+                <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="text-sm font-bold text-slate-800 mb-3">Service Details</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                      <div className="font-bold text-slate-500 mb-1">Approximate Amount</div>
+                      <div className="text-base font-black text-blue-700">{SERVICE_CATALOG[selectedService]?.approximateAmount || 'As applicable'}</div>
+                    </div>
+                    <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                      <div className="font-bold text-slate-500 mb-1">Service Charge</div>
+                      <div className="text-base font-bold text-slate-800">{SERVICE_CATALOG[selectedService]?.serviceCharge || 'As applicable'}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                      <div className="font-bold text-slate-700 mb-2">Original Documents Required</div>
+                      <ul className="list-disc pl-5 space-y-1 text-xs text-slate-600">
+                        {(SERVICE_CATALOG[selectedService]?.originalDocuments || []).map((doc) => <li key={doc}>{doc}</li>)}
+                      </ul>
+                    </div>
+                    <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                      <div className="font-bold text-slate-700 mb-2">Xerox / Photocopy Required</div>
+                      <ul className="list-disc pl-5 space-y-1 text-xs text-slate-600">
+                        {(SERVICE_CATALOG[selectedService]?.xeroxDocuments || []).map((doc) => <li key={doc}>{doc}</li>)}
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-[11px] text-slate-500">{SERVICE_CATALOG[selectedService]?.note}</div>
+                </div>
 
                 {!sessionActive && (
                   <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
