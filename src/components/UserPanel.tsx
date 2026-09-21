@@ -20,10 +20,12 @@ import { playNotificationSound, playAlarmSound, stopAlarmSound, speakAnnouncemen
 
 const SERVICES: ServiceType[] = [
   'Certificates',
-  'Revenue Services',
   'Municipal Services',
   'Electricity Services',
   'Other Services',
+  'Aadhaar Services',
+  'Licence Services',
+  'Application Services',
 ];
 
 interface ActiveAlarm {
@@ -55,6 +57,8 @@ export const UserPanel: React.FC<UserPanelProps> = ({
   const [notification, setNotification] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeAlarm, setActiveAlarm] = useState<ActiveAlarm | null>(null);
+  const [alarmBefore, setAlarmBefore] = useState<number>(2);
+  const [alarmSettingsOpen, setAlarmSettingsOpen] = useState(false);
   const lastAlertKeyRef = useRef<string>('');
 
   // Load user's active token from database on mount & sync with queueState
@@ -66,6 +70,7 @@ export const UserPanel: React.FC<UserPanelProps> = ({
         const token = await api.getUserActiveToken(user.mobile, user.id);
         if (mounted) {
           setMyToken(token);
+          setAlarmBefore(token.alarm_before ?? 2);
         }
       } catch (err) {
         console.warn('Error fetching active user token:', err);
@@ -189,38 +194,26 @@ export const UserPanel: React.FC<UserPanelProps> = ({
       return;
     }
 
-    // 2. +2 TOKEN ALARM (20 seconds alarm):
-    // If token N is called, alarm goes to token N + 2 (e.g. if token 3 is called, alarm goes to 5th token number).
-    // Repeats for all tokens as they are called in sequence!
+    // 2. PERSONAL ALARM: default 2 tokens before, or the citizen's selected value.
+    // The sound is played only in this citizen's browser. Supabase stores only the preference.
     if (currentServing && myToken.status === 'waiting') {
-      const calledNum = currentServing.numeric_id || parseInt(currentServing.token_number.replace(/\D/g, ''), 10);
-      const myNum = myToken.numeric_id || parseInt(myToken.token_number.replace(/\D/g, ''), 10);
+      const calledNum =
+        currentServing.numeric_id ||
+        parseInt(currentServing.token_number.replace(/\D/g, ''), 10);
+      const myNum =
+        myToken.numeric_id ||
+        parseInt(myToken.token_number.replace(/\D/g, ''), 10);
+      const lead = Math.min(5, Math.max(1, alarmBefore || 2));
+      const shouldAlarm = Boolean(calledNum && myNum && myNum === calledNum + lead);
 
-      // Check numeric +2 (e.g., called 3 -> myToken is 5)
-      const isNumericPlusTwo = Boolean(calledNum && myNum && myNum === calledNum + 2);
-
-      // Check queue order: 2nd token in line in waiting queue
-      const isQueueOrderPlusTwo = Boolean(
-        waitingTokens &&
-        waitingTokens.length >= 2 &&
-        waitingTokens[1]?.token_number === myToken.token_number
-      );
-
-      // Check server-computed lastAlarm
-      const isServerAlarmPlusTwo = Boolean(
-        systemState?.lastAlarm &&
-        (systemState.lastAlarm.plusTwoTokenNumber === myToken.token_number ||
-         systemState.lastAlarm.plusTwoNumericId === myNum)
-      );
-
-      if (isNumericPlusTwo || isQueueOrderPlusTwo || isServerAlarmPlusTwo) {
-        const plusTwoAlarmKey = `ALARM_PLUS_TWO_${currentServing.token_number}_${currentServing.called_at || ''}_${myToken.token_number}`;
-        if (lastAlertKeyRef.current !== plusTwoAlarmKey) {
-          lastAlertKeyRef.current = plusTwoAlarmKey;
-          const msg = `Token ${currentServing.token_number} is now called at ${currentServing.counter || 'Counter 1'}. Your token ${myToken.token_number} will be called in 2 tokens (+2). Please prepare your documents and get ready!`;
+      if (shouldAlarm) {
+        const alarmKey = `PERSONAL_ALARM_${currentServing.token_number}_${currentServing.called_at || ''}_${myToken.token_number}_${lead}`;
+        if (lastAlertKeyRef.current !== alarmKey) {
+          lastAlertKeyRef.current = alarmKey;
+          const msg = `Token ${currentServing.token_number} is now called. Your token ${myToken.token_number} will be called in ${lead} token${lead === 1 ? '' : 's'}. Please prepare your documents and get ready!`;
           triggerAlarm({
             type: 'plus_two',
-            title: `🚨 20-SECOND QUEUE ALARM: TOKEN ${currentServing.token_number} CALLED (+2 TOKEN ALERT)`,
+            title: `🚨 QUEUE ALARM: TOKEN ${currentServing.token_number} CALLED`,
             message: msg,
             calledToken: currentServing.token_number,
             myToken: myToken.token_number,
@@ -228,7 +221,7 @@ export const UserPanel: React.FC<UserPanelProps> = ({
           });
           if (soundEnabled) {
             speakAnnouncement(
-              `Attention Token ${myToken.token_number}! Token ${currentServing.token_number} is now called. Your turn will be in two tokens. Please get ready.`
+              `Attention Token ${myToken.token_number}! Token ${currentServing.token_number} is now called. Your turn will be in ${lead} token${lead === 1 ? '' : 's'}. Please get ready.`
             );
           }
         }
@@ -281,11 +274,15 @@ export const UserPanel: React.FC<UserPanelProps> = ({
 
     setIsGenerating(true);
     try {
-      const token = await api.generateToken(selectedService, {
-        id: user.id,
-        name: user.name,
-        mobile: user.mobile,
-      });
+      const token = await api.generateToken(
+        selectedService,
+        {
+          id: user.id,
+          name: user.name,
+          mobile: user.mobile,
+        },
+        alarmBefore
+      );
       setMyToken(token);
       await onRefreshQueue();
       if (soundEnabled) {
@@ -355,13 +352,10 @@ export const UserPanel: React.FC<UserPanelProps> = ({
     myToken &&
       myToken.status === 'waiting' &&
       queueState?.currentServing &&
-      ((myToken.numeric_id ===
+      myToken.numeric_id ===
         (queueState.currentServing.numeric_id ||
           parseInt(queueState.currentServing.token_number.replace(/\D/g, ''), 10)) +
-          2) ||
-        (queueState.waitingTokens.length >= 2 &&
-          queueState.waitingTokens[1]?.token_number === myToken.token_number) ||
-        (queueState.systemState?.lastAlarm?.plusTwoTokenNumber === myToken.token_number))
+          (alarmBefore || 2)
   );
 
   return (
@@ -488,28 +482,52 @@ export const UserPanel: React.FC<UserPanelProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                triggerAlarm({
-                  type: 'plus_two',
-                  title: '🚨 DEMO 20-SECOND ALARM (+2 TOKEN ALERT)',
-                  message: `Preview of 20-second queue alarm: Token T003 called → Token ${myToken?.token_number || 'T005'} alerted (+2 in line). The rhythmic sound will play for 20 seconds.`,
-                  calledToken: 'T003',
-                  myToken: myToken?.token_number || 'T005',
-                  counter: 'Counter 1',
-                });
-                if (soundEnabled) {
-                  speakAnnouncement(
-                    `Attention Token ${myToken?.token_number || '5'}! Token 3 is now called. Your turn will arrive in two tokens. Please get ready.`
-                  );
-                }
-              }}
-              title="Test the 20-second repeating alert alarm"
-              className="p-2 px-2.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center gap-1.5 transition"
-            >
-              <Bell className="w-3.5 h-3.5 text-amber-600" />
-              <span>Test 20s Alarm</span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setAlarmSettingsOpen(!alarmSettingsOpen)}
+                title="Alarm Settings"
+                className="p-2 px-2.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center gap-1.5 transition"
+              >
+                <Bell className="w-3.5 h-3.5 text-amber-600" />
+                <span>Alarm Settings</span>
+              </button>
+
+              {alarmSettingsOpen && (
+                <div className="absolute right-0 top-full mt-2 z-40 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-4">
+                  <div className="text-sm font-bold text-slate-800 mb-1">Alarm Settings</div>
+                  <div className="text-xs text-slate-500 mb-3">
+                    Choose how many tokens before your token the alarm should ring.
+                  </div>
+                  <select
+                    value={alarmBefore}
+                    onChange={async (e) => {
+                      const value = Number(e.target.value);
+                      setAlarmBefore(value);
+                      if (myToken) {
+                        try {
+                          await api.setTokenAlarm(myToken.id, value);
+                          setMyToken({ ...myToken, alarm_before: value });
+                        } catch (err: any) {
+                          alert(err.message || 'Could not save alarm setting.');
+                        }
+                      }
+                      setAlarmSettingsOpen(false);
+                    }}
+                    disabled={Boolean(myToken && myToken.status === 'completed')}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={1}>1 token before</option>
+                    <option value={2}>2 tokens before (Default)</option>
+                    <option value={3}>3 tokens before</option>
+                    <option value={4}>4 tokens before</option>
+                    <option value={5}>5 tokens before</option>
+                  </select>
+                  <div className="text-[11px] text-slate-500 mt-2">
+                    If you do not change it, the alarm is automatically set to 2 tokens before.
+                  </div>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={() => {
