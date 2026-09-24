@@ -9,11 +9,10 @@ import {
   Clock,
   LogOut,
   AlertTriangle,
-  Building,
   CheckCircle2,
   BellRing,
 } from 'lucide-react';
-import { QueueState, Token } from '../types';
+import { QueueState } from '../types';
 import { api } from '../services/api';
 import { playNotificationSound, speakAnnouncement } from '../utils/audio';
 
@@ -46,11 +45,6 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
   const completedCount = queueState?.completedTokens.length ?? 0;
 
   const handleCallNext = async () => {
-    if (!sessionActive) {
-      showStatus('Session is currently closed. Please start the session first.', 'error');
-      return;
-    }
-
     if (waitingCount === 0) {
       showStatus('No tokens waiting in the database queue.', 'info');
       return;
@@ -100,7 +94,9 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
       await api.setSessionActive(!sessionActive);
       await onRefreshQueue();
       showStatus(
-        !sessionActive ? 'Session started successfully. Citizens can now generate tokens.' : 'Session paused/ended.',
+        !sessionActive
+          ? 'Session started successfully. Citizens can now generate new tokens.'
+          : 'Session ended. Existing waiting and serving tokens can still be completed. New tokens are blocked.',
         'success'
       );
     } catch (err: any) {
@@ -115,15 +111,14 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
     try {
       await api.clearAllTokens();
       await onRefreshQueue();
-      showStatus('All tokens cleared from database.', 'info');
+      showStatus('Completed tokens cleared. Waiting and serving tokens were kept.', 'info');
     } catch (err: any) {
-      showStatus(err.message || 'Failed to clear tokens', 'error');
+      showStatus(err.message || 'Failed to clear completed tokens', 'error');
     }
   };
 
   return (
     <div className="max-w-5xl mx-auto py-8 px-4">
-      {/* Alert toast */}
       {statusMessage && (
         <div
           className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-lg border max-w-sm flex items-center gap-3 transition-all ${
@@ -138,16 +133,15 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
         </div>
       )}
 
-      {/* Confirmation Modal */}
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200">
             <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-center text-slate-800">Clear All Tokens?</h3>
+            <h3 className="text-lg font-bold text-center text-slate-800">Clear Completed Tokens?</h3>
             <p className="text-xs text-slate-500 text-center mt-1">
-              This will reset all tokens in the database and restart token numbering from T001.
+              This will remove only completed tokens. Waiting and currently serving tokens will remain in the queue.
             </p>
             <div className="mt-6 flex gap-3">
               <button
@@ -160,14 +154,13 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
                 onClick={handleClearAll}
                 className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-sm"
               >
-                Yes, Clear All
+                Yes, Clear Completed
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header Status Bar matching operator.html */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-y-2 gap-x-6 text-sm">
@@ -227,7 +220,6 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Card 1: Now Serving */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:col-span-1 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -285,22 +277,19 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
           </div>
         </div>
 
-        {/* Card 2: Control Actions matching operator.html buttons */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:col-span-2 flex flex-col justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-800 mb-4">Desk Controls</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* CALL NEXT TOKEN */}
               <button
                 onClick={handleCallNext}
-                disabled={isCalling || waitingCount === 0 || !sessionActive}
+                disabled={isCalling || waitingCount === 0}
                 className="w-full py-4 px-5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm hover:shadow transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 text-base tracking-wide"
               >
                 <Play className="w-5 h-5 fill-current" />
                 <span>{isCalling ? 'Calling Next...' : 'CALL NEXT TOKEN'}</span>
               </button>
 
-              {/* COMPLETE TOKEN */}
               <button
                 onClick={handleComplete}
                 disabled={isCompleting || !currentToken}
@@ -310,7 +299,6 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
                 <span>{isCompleting ? 'Completing...' : 'COMPLETE TOKEN'}</span>
               </button>
 
-              {/* CLEAR ALL TOKENS */}
               <button
                 onClick={() => setShowClearConfirm(true)}
                 className="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-sm hover:shadow transition flex items-center justify-center gap-2 text-sm tracking-wide"
@@ -319,7 +307,6 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
                 <span>CLEAR ALL TOKENS</span>
               </button>
 
-              {/* SESSION TOGGLE (End Session / Start Session) */}
               {sessionActive ? (
                 <button
                   onClick={handleToggleSession}
@@ -353,9 +340,7 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
         </div>
       </div>
 
-      {/* Queue Lists: Waiting Queue & Completed Tokens */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Waiting Queue */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -405,7 +390,6 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
           </div>
         </div>
 
-        {/* Completed Tokens */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
