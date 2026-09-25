@@ -607,10 +607,14 @@ export const api = {
      ======================================================= */
 
   async clearAllTokens(): Promise<void> {
+    /*
+      IMPORTANT:
+      CLEAR ALL TOKENS is an Operator Panel display action only.
 
-    await rpc(
-      'clear_chronous_tokens'
-    );
+      Do NOT call the Supabase clear_chronous_tokens RPC here.
+      Completed token records must remain in the database as history.
+    */
+    return;
   },
 
 
