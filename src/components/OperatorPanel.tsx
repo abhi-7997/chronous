@@ -32,6 +32,17 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
   const [isCompleting, setIsCompleting] = useState(false);
   const [isTogglingSession, setIsTogglingSession] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [hiddenCompletedIds, setHiddenCompletedIds] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('CHRONOUS_HIDDEN_COMPLETED_IDS');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed)
+        ? parsed.map(Number).filter((id) => Number.isFinite(id))
+        : [];
+    } catch {
+      return [];
+    }
+  });
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'error' | 'success' } | null>(null);
 
   const showStatus = (text: string, type: 'info' | 'error' | 'success' = 'info') => {
@@ -42,7 +53,10 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
   const currentToken = queueState?.currentServing;
   const sessionActive = queueState?.systemState.sessionActive ?? true;
   const waitingCount = queueState?.waitingTokens.length ?? 0;
-  const completedCount = queueState?.completedTokens.length ?? 0;
+  const visibleCompletedTokens = (queueState?.completedTokens ?? []).filter(
+    (token) => !hiddenCompletedIds.includes(Number(token.id))
+  );
+  const completedCount = visibleCompletedTokens.length;
 
   const handleCallNext = async () => {
     if (waitingCount === 0) {
@@ -108,13 +122,35 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
 
   const handleClearAll = async () => {
     setShowClearConfirm(false);
+
+    /*
+      CLEAR ALL TOKENS only clears the completed-token DISPLAY
+      in this Operator Panel. Nothing is deleted from Supabase.
+      Waiting and serving tokens are untouched.
+    */
+    const completedIds = (queueState?.completedTokens ?? []).map((token) =>
+      Number(token.id)
+    );
+
+    const nextHiddenIds = Array.from(
+      new Set([...hiddenCompletedIds, ...completedIds])
+    );
+
+    setHiddenCompletedIds(nextHiddenIds);
+
     try {
-      await api.clearAllTokens();
-      await onRefreshQueue();
-      showStatus('Completed tokens cleared. Waiting and serving tokens were kept.', 'info');
-    } catch (err: any) {
-      showStatus(err.message || 'Failed to clear completed tokens', 'error');
+      localStorage.setItem(
+        'CHRONOUS_HIDDEN_COMPLETED_IDS',
+        JSON.stringify(nextHiddenIds)
+      );
+    } catch {
+      // The UI still works if localStorage is unavailable.
     }
+
+    showStatus(
+      'Completed tokens cleared from this Operator Panel. Database history was kept.',
+      'info'
+    );
   };
 
   return (
@@ -407,7 +443,7 @@ export const OperatorPanel: React.FC<OperatorPanelProps> = ({
                 No completed tokens yet today.
               </div>
             ) : (
-              queueState?.completedTokens.map((t) => (
+              visibleCompletedTokens.map((t) => (
                 <div
                   key={t.id}
                   className="py-3 px-3 rounded-lg flex items-center justify-between hover:bg-slate-50 transition"
